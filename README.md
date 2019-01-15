@@ -1,6 +1,6 @@
 # packetbl
 - User space daemon that filters packets against realtime blacklists
-- you can add a rule to the firewall to direct packets towards this daemon, which'll accept or reject the packet based on the result of a DNS request.  For example, an IP from 1.2.3.4 will be rejected if a DNS A record resolves for 4.3.2.1.some-realtime-blacklist.
+- you can add a rule to the firewall to direct packets towards this daemon, which'll accept or reject the packet based on the result of a DNS request.  For example, an IP from 1.2.3.4 will be rejected if a DNS A record resolves for 4.3.2.1.some-realtime-blacklist
 - inspired by / created with reference to https://github.com/zevenet/packetbl
 - an init script isn't yet provided
 
