@@ -1,0 +1,110 @@
+.Dd January 14, 2019
+.Dt PACKETBL 8
+.Os POSIX
+.Sh NAME
+.Nm packetbl
+.Nd User space daemon that filters packets against realtime blacklists
+.Sh SYNOPSIS
+.Pp
+\fBpacketbl\fR
+.Op Fl hDv
+.Op Fl f Ar config_file
+.Sh OPTIONS
+.Bl -hang
+.It \fB-h\fR
+print usage information
+.It \fB-v\fR
+print version information
+.It \fB-D\fR
+dump config (as understood after processing arguments and reading the config
+file). This output includes a commented ConfigFile key, which of course
+wouldn't be a valid key in a real config file. One use of this flag might be to
+confirm that a server IP is correctly getting whitelisted automatically.
+.It \fB-f\fR \fIconfig_file\fR
+set the config file (default: /etc/packetbl.conf)
+.El
+.Sh DESCRIPTION
+packetbl receives packet information from the firewall, checks source IP
+addresses against one or more realtime blacklists, and then tells the firewall
+whether to accept the packet. RBLs are checked with DNS resolution via the
+(non-blocking, concurrent)
+.Xr getaddrinfo_a 3
+library call. packetbl caches DNS results in (as of version 0.1) a size-limited
+hash that forgets earlier cache results as newer cache results are added in a
+last-in-first-out manner. IP whitelisting and blacklisting uses this same hash,
+but these entries are never forgotten and don't count towards the size limit.
+On daemon start, the server's own IPs are whitelisted after a call to ``ip addr
+show up''. All packet decisions (including cache-based decisions) are logged
+via
+.Xr syslog 3 .
+.Pp
+An example firewall rule that could direct packets to packetbl is:
+.nf
+.Li "iptables -I INPUT -p tcp -m tcp --dport 8080 -j NFQUEUE --queue-num 0"
+.nf
+.Sh CONFIG FORMAT
+The config file should contain a list of key-value pairs, one per line, with
+optional comments beginning with a '#' character. Whitespace (blanks or tabs)
+are ignored, but at least one whitespace character must separate a line's key
+from its value. Keys are case-insensitive. Values are either boolean ("yes" or
+"no"), enumerative (requiring one of a set of strings), an IP (in the form of
+"1.2.3.4", no CIDR slash), or a literal string (a file path or hostname with no
+internal whitespace).
+.Pp
+.Sh CONFIG KEYS
+.Bl -tag
+.It \fBblacklistbl\fR
+An RBL to check packets source IPs against. At least one RBL is required; as many can be added as you want: if a source IP resolves for any of them, the packet will be rejected. There is no corresponding 'whitelistbl'.
+.It \fBblacklist\fR
+Packets with this single (non-CIDR) IP will be rejected. Any number of these can be
+provided, and will populate the IP cache (forever--unlike normal cache entries,
+which will expire) that's checked prior to RBLs. Blacklists only contribute
+to the memory size of packetbl; they don't slow down packet processing at all.
+.It \fBwhitelist\fR
+Packets with this single IP will be accepted, analogously to 'blacklist'.
+.El
+.Sh CONFIG EXAMPLE
+.Li "blacklistbl testwprbl.websitewelcome.com"
+.nf
+.Li "blacklist 1.2.3.4"
+.nf
+.Li "whitelist 10.0.0.4"
+.nf
+.Li ""
+.nf
+.Li "# empty lines and comments are ignored"
+.nf
+.Li ""
+.nf
+.Sh BUGS
+The current version (0.1) does not actually support multiple RBLs; only the
+first is used. Queue ID #0 is hard coded. The name `packetbl' is slightly
+unfortunate as an incompatible daemon also exists with that name.
+.Pp
+An earlier version of this program attempted to use the
+.Xr daemon 3
+library call to daemonize the process, but this somehow broke packet handling.
+Presently an init script must handle daemonization.
+.Pp
+A Pid file could be supported, but isn't as any redundant packetbl processes
+will fail early at the nfq_create_queue call anyway (alternately, multiple
+unrelated daemons could run with different queue IDs). The init script is
+expected to not require a pid file.
+.Pp
+Configured blacklists and whitelists are restricted to single IPs. For example,
+you can't blacklist 256 IPs with a ``blacklist 1.2.3.0/24'' entry.
+.Sh IPV6
+IPv6 addresses are not currently supported.
+.Sh SEE ALSO
+.Xr getaddrinfo_a 3 ,
+.Xr syslog 3
+.Pp
+https://netfilter.org/projects/libnetfilter_queue/
+.Sh CHANGELOG
+.Ss 0.1 - 2019-01-15
+.Bl -bullet -compact
+.It
+Initial push to github. daemon (seems to be) functional but needs more testing.
+This version has the major defect of only actually using the first RBL it's
+configured with.
+.El
